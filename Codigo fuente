@@ -1,0 +1,169 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+public class Empleado
+{
+    public int Id { get; set; }
+    public string Codigo { get; set; }
+    public string Nombre { get; set; }
+    public string Departamento { get; set; }
+    public decimal SalarioBase { get; set; }
+    public bool Activo { get; set; } = true;
+    public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
+}
+
+public class NominaMensual
+{
+    public int Id { get; set; }
+    public int EmpleadoId { get; set; }
+    public int Mes { get; set; }
+    public int Año { get; set; }
+
+    public decimal SalarioBruto { get; set; }
+    public decimal AFP { get; set; }
+    public decimal ARS { get; set; }
+    public decimal ISR { get; set; }
+    public decimal SalarioNeto { get; set; }
+}
+
+public class FakeDb
+{
+    public List<Empleado> Empleados = new List<Empleado>();
+    public List<NominaMensual> Nominas = new List<NominaMensual>();
+
+    public int NextEmpId = 1;
+    public int NextNominaId = 1;
+}
+
+public class NominaService
+{
+    private readonly FakeDb _db;
+
+    public NominaService(FakeDb db)
+    {
+        _db = db;
+    }
+
+    public NominaMensual Generar(Empleado e, int mes, int año, bool aplicarIsr)
+    {
+        decimal bruto = e.SalarioBase;
+        decimal afp = bruto * 0.0287m;
+        decimal ars = bruto * 0.0304m;
+        decimal isr = aplicarIsr ? bruto * 0.05m : 0m;
+        decimal neto = bruto - afp - ars - isr;
+
+        var n = new NominaMensual
+        {
+            Id = _db.NextNominaId++,
+            EmpleadoId = e.Id,
+            Mes = mes,
+            Año = año,
+            SalarioBruto = bruto,
+            AFP = afp,
+            ARS = ars,
+            ISR = isr,
+            SalarioNeto = neto
+        };
+
+        _db.Nominas.Add(n);
+        return n;
+    }
+}
+
+public class Program
+{
+    static FakeDb db = new FakeDb();
+    static NominaService nomService = new NominaService(db);
+
+    public static void Main()
+    {
+        while (true)
+        {
+            Console.WriteLine("=== SISTEMA DE NÓMINA (MEMORIA) ===");
+            Console.WriteLine("1) Agregar empleado");
+            Console.WriteLine("2) Listar empleados");
+            Console.WriteLine("3) Generar nómina");
+            Console.WriteLine("4) Ver reporte");
+            Console.WriteLine("0) Salir");
+            Console.Write("Opción: ");
+            string op = Console.ReadLine();
+
+            if (op == "0") break;
+
+            switch (op)
+            {
+                case "1": Agregar(); break;
+                case "2": Listar(); break;
+                case "3": Generar(); break;
+                case "4": Reporte(); break;
+                default: Console.WriteLine("Opción inválida."); break;
+            }
+            Console.WriteLine();
+        }
+    }
+
+    static void Agregar()
+    {
+        Console.Write("Código: ");
+        string c = Console.ReadLine();
+        Console.Write("Nombre: ");
+        string n = Console.ReadLine();
+        Console.Write("Departamento: ");
+        string d = Console.ReadLine();
+        Console.Write("Salario base: ");
+        decimal s = decimal.Parse(Console.ReadLine());
+
+        var e = new Empleado
+        {
+            Id = db.NextEmpId++,
+            Codigo = c,
+            Nombre = n,
+            Departamento = d,
+            SalarioBase = s
+        };
+
+        db.Empleados.Add(e);
+        Console.WriteLine("Empleado agregado.");
+    }
+
+    static void Listar()
+    {
+        foreach (var e in db.Empleados)
+            Console.WriteLine($"{e.Id} | {e.Codigo} | {e.Nombre} | {e.Departamento} | {e.SalarioBase}");
+    }
+
+    static void Generar()
+    {
+        Console.Write("Mes: ");
+        int mes = int.Parse(Console.ReadLine());
+        Console.Write("Año: ");
+        int año = int.Parse(Console.ReadLine());
+
+        Console.Write("Aplicar ISR? (S/N): ");
+        bool isr = Console.ReadLine().ToUpper() == "S";
+
+        foreach (var e in db.Empleados.Where(x => x.Activo))
+        {
+            nomService.Generar(e, mes, año, isr);
+        }
+
+        Console.WriteLine("Nómina generada.");
+    }
+
+    static void Reporte()
+    {
+        Console.Write("Mes: ");
+        int mes = int.Parse(Console.ReadLine());
+        Console.Write("Año: ");
+        int año = int.Parse(Console.ReadLine());
+
+        var lista = db.Nominas.Where(n => n.Mes == mes && n.Año == año).ToList();
+
+        foreach (var n in lista)
+        {
+            var e = db.Empleados.First(x => x.Id == n.EmpleadoId);
+            Console.WriteLine($"{e.Nombre} | Neto: {n.SalarioNeto}");
+        }
+    }
+}
